@@ -93,7 +93,9 @@ def add_cwd_segment(powerline):
             separator = None
             separator_fg = None
 
-        powerline.append(' %s ' % maybe_shorten_name(powerline, name), fg, bg,
+        if not is_last_dir:
+            name = maybe_shorten_name(powerline, name)
+        powerline.append(' %s ' % name, fg, bg,
                          separator, separator_fg)
 
 
