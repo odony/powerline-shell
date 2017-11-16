@@ -35,8 +35,8 @@ def maybe_shorten_name(powerline, name):
     return the name up to their specified length. Otherwise returns the full
     name."""
     max_size = powerline.segment_conf("cwd", "max_dir_size")
-    if max_size:
-        return name[:max_size]
+    if max_size and len(name) > max_size:
+        return name[:max_size - 1] + ELLIPSIS
     return name
 
 
