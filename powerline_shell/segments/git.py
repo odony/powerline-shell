@@ -1,8 +1,13 @@
 import re
+import stat
 import subprocess
 import os
 from ..utils import RepoStats, ThreadedSegment
 
+# `time` segment shadows time module, but exposes it
+from time import time
+
+FETCH_HEAD_PATH = os.path.join('.git', 'FETCH_HEAD')
 
 def get_PATH():
     """Normally gets the PATH from the OS. This function exists to enable
@@ -59,11 +64,12 @@ def parse_git_stats(status):
     return stats
 
 
-def build_stats():
+def build_stats(powerline):
+    env = git_subprocess_env()
     try:
         p = subprocess.Popen(['git', 'status', '--porcelain', '-b'],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                             env=git_subprocess_env())
+                             env=env)
     except OSError:
         # Popen will throw an OSError if git is not found
         return (None, None)
@@ -82,12 +88,32 @@ def build_stats():
         branch = branch_info['local']
     else:
         branch = _get_git_detached_branch()
+
+    if powerline.segment_conf("git", "fetch_auto", True):
+        try:
+            p = subprocess.Popen(['git', 'rev-parse', '--show-toplevel'],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=env)
+            fetch_head_path = os.path.join(p.communicate()[0].strip(), FETCH_HEAD_PATH)
+            mtime = os.stat(fetch_head_path)[stat.ST_MTIME]
+            timeout = powerline.segment_conf("git", "fetch_timeout", 15 * 60)
+            if time.time() - mtime > timeout:
+                print "Fetching! FETCH_HEAD is too old: ", time.time() - mtime
+                subprocess.Popen(['git fetch --all --quiet &'], shell=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=env)
+            else:
+                print "Cool! FETCH_HEAD is recent: ", time.time() - mtime
+        except OSError as e:
+            print "Oops", e
+            pass
+
     return stats, branch
 
 
 class Segment(ThreadedSegment):
     def run(self):
-        self.stats, self.branch = build_stats()
+        self.stats, self.branch = build_stats(self.powerline)
 
     def add_to_powerline(self):
         self.join()
